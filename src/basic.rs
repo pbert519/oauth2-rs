@@ -1,26 +1,17 @@
-use std::fmt::Error as FormatterError;
-use std::fmt::{Debug, Display, Formatter};
+use core::fmt::Error as FormatterError;
+use core::fmt::{Debug, Display, Formatter};
+
+use alloc::string::{String, ToString};
 
 use super::{
     Client, EmptyExtraTokenFields, ErrorResponseType, RequestTokenError, StandardErrorResponse,
     StandardTokenResponse, TokenType,
 };
-use crate::{
-    revocation::{RevocationErrorResponseType, StandardRevocableToken},
-    StandardTokenIntrospectionResponse,
-};
 
 ///
 /// Basic OAuth2 client specialization, suitable for most applications.
 ///
-pub type BasicClient = Client<
-    BasicErrorResponse,
-    BasicTokenResponse,
-    BasicTokenType,
-    BasicTokenIntrospectionResponse,
-    StandardRevocableToken,
-    BasicRevocationErrorResponse,
->;
+pub type BasicClient = Client<BasicErrorResponse, BasicTokenResponse, BasicTokenType>;
 
 ///
 /// Basic OAuth2 authorization token types.
@@ -83,12 +74,6 @@ impl TokenType for BasicTokenType {}
 /// Basic OAuth2 token response.
 ///
 pub type BasicTokenResponse = StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
-
-///
-/// Basic OAuth2 token introspection response.
-///
-pub type BasicTokenIntrospectionResponse =
-    StandardTokenIntrospectionResponse<EmptyExtraTokenFields, BasicTokenType>;
 
 ///
 /// Basic access token error types.
@@ -197,9 +182,4 @@ pub type BasicErrorResponse = StandardErrorResponse<BasicErrorResponseType>;
 ///
 /// Token error specialization for basic OAuth2 implementation.
 ///
-pub type BasicRequestTokenError<RE> = RequestTokenError<RE, BasicErrorResponse>;
-
-///
-/// Revocation error response specialization for basic OAuth2 implementation.
-///
-pub type BasicRevocationErrorResponse = StandardErrorResponse<RevocationErrorResponseType>;
+pub type BasicRequestTokenError = RequestTokenError<BasicErrorResponse>;

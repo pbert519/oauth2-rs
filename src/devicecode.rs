@@ -1,8 +1,8 @@
-use std::error::Error;
-use std::fmt::Error as FormatterError;
-use std::fmt::{Debug, Display, Formatter};
-use std::marker::PhantomData;
-use std::time::Duration;
+use alloc::string::String;
+use core::fmt::Error as FormatterError;
+use core::fmt::{Debug, Display, Formatter};
+use core::marker::PhantomData;
+use core::time::Duration;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -227,13 +227,12 @@ impl Display for DeviceCodeErrorResponseType {
 ///
 pub type DeviceCodeErrorResponse = StandardErrorResponse<DeviceCodeErrorResponseType>;
 
-pub(crate) enum DeviceAccessTokenPollResult<TR, RE, TE, TT>
+pub(crate) enum DeviceAccessTokenPollResult<TR, TE, TT>
 where
     TE: ErrorResponse + 'static,
     TR: TokenResponse<TT>,
     TT: TokenType,
-    RE: Error + 'static,
 {
     ContinueWithNewPollInterval(Duration),
-    Done(Result<TR, RequestTokenError<RE, TE>>, PhantomData<TT>),
+    Done(Result<TR, RequestTokenError<TE>>, PhantomData<TT>),
 }

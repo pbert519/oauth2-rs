@@ -1,14 +1,11 @@
-use std::convert::Into;
-use std::fmt::Error as FormatterError;
-use std::fmt::{Debug, Formatter};
-#[cfg(feature = "timing-resistant-secret-traits")]
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
+use core::convert::Into;
+use core::fmt::Error as FormatterError;
+use core::fmt::{Debug, Formatter};
+use core::ops::Deref;
 
-use rand::{thread_rng, Rng};
+use alloc::string::String;
+use alloc::string::ToString;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use url::Url;
 
 macro_rules! new_type {
     // Convenience pattern without an impl.
@@ -150,7 +147,6 @@ macro_rules! new_secret_type {
         $(
             #[$attr]
         )*
-        #[cfg_attr(feature = "timing-resistant-secret-traits", derive(Eq))]
         pub struct $name($type);
         impl $name {
             $($item)*
@@ -173,21 +169,6 @@ macro_rules! new_secret_type {
                 write!(f, concat!(stringify!($name), "([redacted])"))
             }
         }
-
-        #[cfg(feature = "timing-resistant-secret-traits")]
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                Sha256::digest(&self.0) == Sha256::digest(&other.0)
-            }
-        }
-
-        #[cfg(feature = "timing-resistant-secret-traits")]
-        impl Hash for $name {
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                Sha256::digest(&self.0).hash(state)
-            }
-        }
-
     };
 }
 
@@ -250,33 +231,28 @@ macro_rules! new_url_type {
     ) => {
         $(#[$attr])*
         #[derive(Clone)]
-        pub struct $name(Url, String);
+        pub struct $name(String);
         impl $name {
             #[doc = $new_doc]
-            pub fn new(url: String) -> Result<Self, ::url::ParseError> {
-                Ok($name(Url::parse(&url)?, url))
-            }
-            #[doc = $from_url_doc]
-            pub fn from_url(url: Url) -> Self {
-                let s = url.to_string();
-                Self(url, s)
+            pub fn new(url: String) -> Self {
+                $name(url)
             }
             #[doc = $url_doc]
-            pub fn url(&self) -> &Url {
-                return &self.0;
+            pub fn url(&self) -> String {
+                self.0.clone()
             }
             $($item)*
         }
         impl Deref for $name {
             type Target = String;
             fn deref(&self) -> &String {
-                &self.1
+                &self.0
             }
         }
-        impl ::std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        impl ::core::fmt::Debug for $name {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> {
                 let mut debug_trait_builder = f.debug_tuple(stringify!($name));
-                debug_trait_builder.field(&self.1);
+                debug_trait_builder.field(&self.0);
                 debug_trait_builder.finish()
             }
         }
@@ -291,8 +267,8 @@ macro_rules! new_url_type {
 
                     fn expecting(
                         &self,
-                        formatter: &mut ::std::fmt::Formatter
-                    ) -> ::std::fmt::Result {
+                        formatter: &mut ::core::fmt::Formatter
+                    ) -> ::core::fmt::Result {
                         formatter.write_str(stringify!($name))
                     }
 
@@ -300,7 +276,7 @@ macro_rules! new_url_type {
                     where
                         E: ::serde::de::Error,
                     {
-                        $name::new(v.to_string()).map_err(E::custom)
+                        Ok($name::new(v.to_string()))
                     }
                 }
                 deserializer.deserialize_str(UrlVisitor {})
@@ -311,27 +287,27 @@ macro_rules! new_url_type {
             where
                 SE: ::serde::Serializer,
             {
-                serializer.serialize_str(&self.1)
+                serializer.serialize_str(&self.0)
             }
         }
-        impl ::std::hash::Hash for $name {
-            fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) -> () {
-                ::std::hash::Hash::hash(&(self.1), state);
+        impl ::core::hash::Hash for $name {
+            fn hash<H: ::core::hash::Hasher>(&self, state: &mut H) -> () {
+                ::core::hash::Hash::hash(&(self.0), state);
             }
         }
         impl Ord for $name {
-            fn cmp(&self, other: &$name) -> ::std::cmp::Ordering {
-                self.1.cmp(&other.1)
+            fn cmp(&self, other: &$name) -> ::core::cmp::Ordering {
+                self.0.cmp(&other.0)
             }
         }
         impl PartialOrd for $name {
-            fn partial_cmp(&self, other: &$name) -> Option<::std::cmp::Ordering> {
+            fn partial_cmp(&self, other: &$name) -> Option<::core::cmp::Ordering> {
                 Some(self.cmp(other))
             }
         }
         impl PartialEq for $name {
             fn eq(&self, other: &$name) -> bool {
-                self.1 == other.1
+                self.0 == other.0
             }
         }
         impl Eq for $name {}
@@ -361,24 +337,6 @@ new_url_type![
 ];
 new_url_type![
     ///
-    /// URL of the client's redirection endpoint.
-    ///
-    RedirectUrl
-];
-new_url_type![
-    ///
-    /// URL of the client's [RFC 7662 OAuth 2.0 Token Introspection](https://tools.ietf.org/html/rfc7662) endpoint.
-    ///
-    IntrospectionUrl
-];
-new_url_type![
-    ///
-    /// URL of the authorization server's RFC 7009 token revocation endpoint.
-    ///
-    RevocationUrl
-];
-new_url_type![
-    ///
     /// URL of the client's device authorization endpoint.
     ///
     DeviceAuthorizationUrl
@@ -397,14 +355,6 @@ new_type![
     #[derive(Deserialize, Serialize, Eq, Hash)]
     ResponseType(String)
 ];
-new_type![
-    ///
-    /// Resource owner's username used directly as an authorization grant to obtain an access
-    /// token.
-    ///
-    #[derive(Deserialize, Serialize, Eq, Hash)]
-    ResourceOwnerUsername(String)
-];
 
 new_type![
     ///
@@ -419,170 +369,6 @@ impl AsRef<str> for Scope {
     }
 }
 
-new_type![
-    ///
-    /// Code Challenge Method used for [PKCE](https://tools.ietf.org/html/rfc7636) protection
-    /// via the `code_challenge_method` parameter.
-    ///
-    #[derive(Deserialize, Serialize, Eq, Hash)]
-    PkceCodeChallengeMethod(String)
-];
-// This type intentionally does not implement Clone in order to make it difficult to reuse PKCE
-// challenges across multiple requests.
-new_secret_type![
-    ///
-    /// Code Verifier used for [PKCE](https://tools.ietf.org/html/rfc7636) protection via the
-    /// `code_verifier` parameter. The value must have a minimum length of 43 characters and a
-    /// maximum length of 128 characters.  Each character must be ASCII alphanumeric or one of
-    /// the characters "-" / "." / "_" / "~".
-    ///
-    #[derive(Deserialize, Serialize)]
-    PkceCodeVerifier(String)
-];
-
-///
-/// Code Challenge used for [PKCE](https://tools.ietf.org/html/rfc7636) protection via the
-/// `code_challenge` parameter.
-///
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct PkceCodeChallenge {
-    code_challenge: String,
-    code_challenge_method: PkceCodeChallengeMethod,
-}
-impl PkceCodeChallenge {
-    ///
-    /// Generate a new random, base64-encoded SHA-256 PKCE code.
-    ///
-    pub fn new_random_sha256() -> (Self, PkceCodeVerifier) {
-        Self::new_random_sha256_len(32)
-    }
-
-    ///
-    /// Generate a new random, base64-encoded SHA-256 PKCE challenge code and verifier.
-    ///
-    /// # Arguments
-    ///
-    /// * `num_bytes` - Number of random bytes to generate, prior to base64-encoding.
-    ///   The value must be in the range 32 to 96 inclusive in order to generate a verifier
-    ///   with a suitable length.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the resulting PKCE code verifier is not of a suitable length
-    /// to comply with [RFC 7636](https://tools.ietf.org/html/rfc7636).
-    ///
-    pub fn new_random_sha256_len(num_bytes: u32) -> (Self, PkceCodeVerifier) {
-        let code_verifier = Self::new_random_len(num_bytes);
-        (
-            Self::from_code_verifier_sha256(&code_verifier),
-            code_verifier,
-        )
-    }
-
-    ///
-    /// Generate a new random, base64-encoded PKCE code verifier.
-    ///
-    /// # Arguments
-    ///
-    /// * `num_bytes` - Number of random bytes to generate, prior to base64-encoding.
-    ///   The value must be in the range 32 to 96 inclusive in order to generate a verifier
-    ///   with a suitable length.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the resulting PKCE code verifier is not of a suitable length
-    /// to comply with [RFC 7636](https://tools.ietf.org/html/rfc7636).
-    ///
-    fn new_random_len(num_bytes: u32) -> PkceCodeVerifier {
-        // The RFC specifies that the code verifier must have "a minimum length of 43
-        // characters and a maximum length of 128 characters".
-        // This implies 32-96 octets of random data to be base64 encoded.
-        assert!(num_bytes >= 32 && num_bytes <= 96);
-        let random_bytes: Vec<u8> = (0..num_bytes).map(|_| thread_rng().gen::<u8>()).collect();
-        PkceCodeVerifier::new(base64::encode_config(
-            &random_bytes,
-            base64::URL_SAFE_NO_PAD,
-        ))
-    }
-
-    ///
-    /// Generate a SHA-256 PKCE code challenge from the supplied PKCE code verifier.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the supplied PKCE code verifier is not of a suitable length
-    /// to comply with [RFC 7636](https://tools.ietf.org/html/rfc7636).
-    ///
-    pub fn from_code_verifier_sha256(code_verifier: &PkceCodeVerifier) -> Self {
-        // The RFC specifies that the code verifier must have "a minimum length of 43
-        // characters and a maximum length of 128 characters".
-        assert!(code_verifier.secret().len() >= 43 && code_verifier.secret().len() <= 128);
-
-        let digest = Sha256::digest(code_verifier.secret().as_bytes());
-        let code_challenge = base64::encode_config(&digest, base64::URL_SAFE_NO_PAD);
-
-        Self {
-            code_challenge,
-            code_challenge_method: PkceCodeChallengeMethod::new("S256".to_string()),
-        }
-    }
-
-    ///
-    /// Generate a new random, base64-encoded PKCE code.
-    /// Use is discouraged unless the endpoint does not support SHA-256.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the supplied PKCE code verifier is not of a suitable length
-    /// to comply with [RFC 7636](https://tools.ietf.org/html/rfc7636).
-    ///
-    #[cfg(feature = "pkce-plain")]
-    pub fn new_random_plain() -> (Self, PkceCodeVerifier) {
-        let code_verifier = Self::new_random_len(32);
-        (
-            Self::from_code_verifier_plain(&code_verifier),
-            code_verifier,
-        )
-    }
-
-    ///
-    /// Generate a plain PKCE code challenge from the supplied PKCE code verifier.
-    /// Use is discouraged unless the endpoint does not support SHA-256.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if the supplied PKCE code verifier is not of a suitable length
-    /// to comply with [RFC 7636](https://tools.ietf.org/html/rfc7636).
-    ///
-    #[cfg(feature = "pkce-plain")]
-    pub fn from_code_verifier_plain(code_verifier: &PkceCodeVerifier) -> Self {
-        // The RFC specifies that the code verifier must have "a minimum length of 43
-        // characters and a maximum length of 128 characters".
-        assert!(code_verifier.secret().len() >= 43 && code_verifier.secret().len() <= 128);
-
-        let code_challenge = code_verifier.secret().clone();
-
-        Self {
-            code_challenge,
-            code_challenge_method: PkceCodeChallengeMethod::new("plain".to_string()),
-        }
-    }
-
-    ///
-    /// Returns the PKCE code challenge as a string.
-    ///
-    pub fn as_str(&self) -> &str {
-        &self.code_challenge
-    }
-
-    ///
-    /// Returns the PKCE code challenge method as a string.
-    ///
-    pub fn method(&self) -> &PkceCodeChallengeMethod {
-        &self.code_challenge_method
-    }
-}
-
 new_secret_type![
     ///
     /// Client password issued to the client during the registration process described by
@@ -590,34 +376,6 @@ new_secret_type![
     ///
     #[derive(Clone, Deserialize, Serialize)]
     ClientSecret(String)
-];
-new_secret_type![
-    ///
-    /// Value used for [CSRF](https://tools.ietf.org/html/rfc6749#section-10.12) protection
-    /// via the `state` parameter.
-    ///
-    #[must_use]
-    #[derive(Clone, Deserialize, Serialize)]
-    CsrfToken(String)
-    impl {
-        ///
-        /// Generate a new random, base64-encoded 128-bit CSRF token.
-        ///
-        pub fn new_random() -> Self {
-            CsrfToken::new_random_len(16)
-        }
-        ///
-        /// Generate a new random, base64-encoded CSRF token of the specified length.
-        ///
-        /// # Arguments
-        ///
-        /// * `num_bytes` - Number of random bytes to generate, prior to base64-encoding.
-        ///
-        pub fn new_random_len(num_bytes: u32) -> Self {
-            let random_bytes: Vec<u8> = (0..num_bytes).map(|_| thread_rng().gen::<u8>()).collect();
-            CsrfToken::new(base64::encode_config(&random_bytes, base64::URL_SAFE_NO_PAD))
-        }
-    }
 ];
 new_secret_type![
     ///
@@ -639,14 +397,6 @@ new_secret_type![
     ///
     #[derive(Clone, Deserialize, Serialize)]
     AccessToken(String)
-];
-new_secret_type![
-    ///
-    /// Resource owner's password used directly as an authorization grant to obtain an access
-    /// token.
-    ///
-    #[derive(Clone)]
-    ResourceOwnerPassword(String)
 ];
 new_secret_type![
     ///
